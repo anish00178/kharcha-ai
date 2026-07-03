@@ -1,12 +1,14 @@
 // 1. IMPORT OUR TOOLS
 const express = require("express");
 const cors = require("cors");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 require("dotenv").config();
 const { PrismaClient } = require("@prisma/client");
-
+  
 // 2. INITIALIZE THE SERVER AND DATABASE
 const app = express();
 const prisma = new PrismaClient();
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // 3. MIDDLEWARE
 app.use(cors());
