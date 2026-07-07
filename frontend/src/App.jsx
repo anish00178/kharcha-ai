@@ -4,6 +4,8 @@ import ExpenseChart from "./ExpenseChart";
 import { Card, CardContent } from "./components/ui/card";
 
 export default function App() {
+
+  const myBrokenVariable = "I am a bug!";
   // Expense List
   const [expenses, setExpenses] = useState([]);
 
@@ -202,8 +204,11 @@ export default function App() {
         )}
       </div>
 
+      {/* Expense Chart */}
+      <ExpenseChart />
+
       {/* Expense List */}
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md mt-8">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">
           Recent Spending
         </h2>
@@ -230,4 +235,4 @@ export default function App() {
       </div>
     </div>
   );
-} 
+}
