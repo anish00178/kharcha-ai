@@ -1,50 +1,78 @@
-// 1. IMPORT OUR TOOLS
 const express = require("express");
 const cors = require("cors");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-require("dotenv").config();
+const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// 2. INITIALIZE THE SERVER AND DATABASE
+dotenv.config();
+
 const app = express();
 const prisma = new PrismaClient();
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// 3. MIDDLEWARE
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// 4. GET ALL EXPENSES
+// Home Route
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message: "Kharcha-AI Backend Running 🚀",
+  });
+});
+
+// ==========================
+// GET ALL EXPENSES
+// ==========================
 app.get("/api/expenses", async (req, res) => {
   try {
-    const allExpenses = await prisma.expense.findMany();
-    res.json(allExpenses);
+    const expenses = await prisma.expense.findMany({
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json(expenses);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to fetch expenses" });
+    console.error("Expense Fetch Error:", error);
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
   }
 });
 
-// 5. CREATE A NEW EXPENSE
+// ==========================
+// CREATE EXPENSE
+// ==========================
 app.post("/api/expenses", async (req, res) => {
   try {
     const { amount, category } = req.body;
 
-    const newExpense = await prisma.expense.create({
+    const expense = await prisma.expense.create({
       data: {
         amount: Number(amount),
         category,
       },
     });
 
-    res.json(newExpense);
+    res.json(expense);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to save expense" });
+    console.error("Expense Save Error:", error);
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
   }
 });
 
-// 6. ANALYZE VOICE USING GEMINI
+// ==========================
+// GEMINI ANALYZE
+// ==========================
 app.post("/api/analyze", async (req, res) => {
   try {
     const { text } = req.body;
@@ -54,36 +82,27 @@ app.post("/api/analyze", async (req, res) => {
     });
 
     const prompt = `
-You are an expert financial categorizer.
-
-Read the spoken text and extract only:
-1. amount
-2. category
-
-Return ONLY valid JSON.
+Extract only JSON.
 
 Example:
+
 {
-  "amount": 150,
+  "amount": 250,
   "category": "Food"
 }
 
-Spoken Text:
-"${text}"
+Sentence:
+${text}
 `;
 
     const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const aiResponse = response.text();
 
-    console.log("🤖 GEMINI AI SAYS:");
-    console.log(aiResponse);
+    const response = await result.response;
 
     res.json({
       success: true,
-      result: aiResponse,
+      result: response.text(),
     });
-
   } catch (error) {
     console.error("Gemini Error:", error);
 
@@ -94,7 +113,9 @@ Spoken Text:
   }
 });
 
-// 7. SCAN RECEIPT USING GEMINI VISION
+// ==========================
+// RECEIPT SCANNER
+// ==========================
 app.post("/api/scan-receipt", async (req, res) => {
   try {
     const { imageBase64 } = req.body;
@@ -104,48 +125,36 @@ app.post("/api/scan-receipt", async (req, res) => {
     });
 
     const prompt = `
-You are an expert accountant.
+Extract merchant and amount.
 
-Read the receipt image carefully.
-
-Extract only:
-1. Merchant Name
-2. Total Amount Paid
-
-Return ONLY valid JSON.
+Return only JSON.
 
 Example:
+
 {
-  "merchant": "Domino's",
-  "amount": 560
+  "merchant":"Dominos",
+  "amount":560
 }
 `;
 
-    const imagePart = {
-      inlineData: {
-        data: imageBase64,
-        mimeType: "image/jpeg",
-      },
-    };
-
     const result = await model.generateContent([
       prompt,
-      imagePart,
+      {
+        inlineData: {
+          data: imageBase64,
+          mimeType: "image/jpeg",
+        },
+      },
     ]);
 
     const response = await result.response;
-    const aiResponse = response.text();
-
-    console.log("📷 GEMINI VISION SAYS:");
-    console.log(aiResponse);
 
     res.json({
       success: true,
-      result: aiResponse,
+      result: response.text(),
     });
-
   } catch (error) {
-    console.error("Vision Error:", error);
+    console.error("Receipt Scan Error:", error);
 
     res.status(500).json({
       success: false,
@@ -153,9 +162,25 @@ Example:
     });
   }
 });
-// 8. START SERVER
-const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
+// ==========================
+// START SERVER
+// ==========================
+const PORT = process.env.PORT || 8080;
+
+app.listen(PORT, async () => {
+  try {
+    await prisma.$connect();
+    console.log("✅ Database Connected");
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
+  } catch (error) {
+    console.error("❌ Database Connection Failed");
+    console.error(error);
+  }
+});
+
+// Close Prisma on exit
+process.on("SIGINT", async () => {
+  await prisma.$disconnect();
+  process.exit(0);
 });

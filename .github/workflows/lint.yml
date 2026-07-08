@@ -9,14 +9,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Step 1 - Download our code from GitHub
+        uses: actions/checkout@v3
 
-      - uses: actions/setup-node@v3
+      - name: Step 2 - Install Node.js (The Engine)
+        uses: actions/setup-node@v3
         with:
-          node-version: "18"
+          node-version: '18'
 
-      - working-directory: ./frontend
+      - name: Step 3 - Go into Frontend and install tools
+        working-directory: ./frontend
         run: npm install
 
-      - working-directory: ./frontend
-        run: npm run lint
+      # 🔥 FORCED FIX: Agar optional native binding miss ho, toh linux architecture binary ko alag se runtime par force install karke execute karo
+      - name: Step 4 - Force Download Platform Binding & Run Lint
+        working-directory: ./frontend
+        run: |
+          npm install @oxlint/binding-linux-x64-gnu
+          npx oxlint

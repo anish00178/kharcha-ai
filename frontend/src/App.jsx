@@ -4,7 +4,7 @@ import ExpenseChart from "./ExpenseChart";
 import { Card, CardContent } from "./components/ui/card";
 
 export default function App() {
-
+ 
   // Expense List
   const [expenses, setExpenses] = useState([]);
 
@@ -18,19 +18,27 @@ export default function App() {
   // ==========================
   // Load Expenses
   // ==========================
-  const loadExpenses = async () => {
-    try {
-      const response = await fetch("https://kharcha-ai.onrender.com/api/expenses");
-      const realData = await response.json();
-      setExpenses(realData);
-    } catch (error) {
-      console.error("Failed to load expenses", error);
+ const loadExpenses = async () => {
+  try {
+    const response = await fetch("https://kharcha-backend-ai.onrender.com/api/expenses");
+    
+    // Agar server 500 error de, toh crash hone ke bajaye khali array set karo
+    if (!response.ok) {
+      setExpenses([]);
+      return;
     }
-  };
 
-  useEffect(() => {
-    loadExpenses();
-  }, []);
+    const realData = await response.json();
+    if (Array.isArray(realData)) {
+      setExpenses(realData);
+    } else {
+      setExpenses([]);
+    }
+  } catch (error) {
+    console.error("Failed to load expenses:", error);
+    setExpenses([]); // 💡 Never crash the UI
+  }
+};
 
   // ==========================
   // Voice Recognition
@@ -41,7 +49,7 @@ export default function App() {
 
     if (!SpeechRecognition) {
       alert(
-        "Your browser does not support Voice Recognition. Please use Google Chrome."
+        "Your browser does not support Voice Recognition. Please use Google Chrome.",
       );
       return;
     }
@@ -63,7 +71,7 @@ export default function App() {
 
       try {
         // Send voice text to Gemini
-        const aiResponse = await fetch("https://kharcha-ai.onrender.com/api/analyze", {
+        const aiResponse = await fetch("https://kharcha-backend-ai.onrender.com/api/analyze", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -84,7 +92,7 @@ export default function App() {
         const extractedExpense = JSON.parse(cleanJsonString);
 
         // Save to backend
-        await fetch("https://kharcha-ai.onrender.com/api/expenses", {
+        await fetch("https://kharcha-backend-ai.onrender.com/api/expenses", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -116,45 +124,76 @@ export default function App() {
   // Receipt Scanner
   // ==========================
   const handleFileUpload = (event) => {
-    const file = event.target.files[0];
+  const file = event.target.files[0];
+  if (!file) return;
+  setIsScanning(true);
 
-    if (!file) return;
-
-    setIsScanning(true);
-
-    const reader = new FileReader();
-
-    reader.readAsDataURL(file);
-
-    reader.onloadend = async () => {
-      const imageBase64 = reader.result.split(",")[1];
-
-      try {
-        const response = await fetch(
-          "https://kharcha-ai.onrender.com/api/scan-receipt",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              imageBase64,
-            }),
-          }
-        );
-
-        const data = await response.json();
-
-        alert("Receipt Scanned Successfully!\n\n" + data.result);
-      } catch (error) {
-        console.error(error);
-        alert("Failed to scan receipt.");
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onloadend = async () => {
+    const base64String = reader.result.split(',')[1];
+    try {
+      const response = await fetch('https://kharcha-backend-ai.onrender.com/api/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64String })
+      });
+      
+      // 🔥 SAFETY LOCK 1: Agar backend fail ho (500/429 error), toh yahi se roko
+      if (!response.ok) {
+        throw new Error("Backend server failed or Gemini limit exceeded.");
+      }
+      
+      const data = await response.json();
+      
+      // 🔥 SAFETY LOCK 2: Check karo ki data aur data.result sahi mein exist karte hain
+      if (!data || !data.result) {
+        throw new Error("Invalid response from AI model.");
       }
 
-      setIsScanning(false);
-    };
-  };
+      console.log("Scanned Data:", data.result);
 
+      let cleanData = {};
+      if (typeof data.result === 'string') {
+        const cleanJsonString = data.result.replace(/```json/g, "").replace(/```/g, "").trim();
+        cleanData = JSON.parse(cleanJsonString);
+      } else {
+        cleanData = data.result;
+      }
+
+      // 🔥 SAFETY LOCK 3: Fallback rules agar properties gayab hon
+      const finalCategory = cleanData?.merchant || cleanData?.category || "Receipt Scan";
+      const finalAmount = Number(cleanData?.amount || 0);
+
+      if (finalAmount <= 0) {
+        alert("AI could not extract a valid amount.");
+        return;
+      }
+
+      const saveResponse = await fetch("https://kharcha-backend-ai.onrender.com/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: finalAmount,
+          category: finalCategory
+        })
+      });
+
+      if (saveResponse.ok) {
+        alert(`Success! Saved ₹${finalAmount} for ${finalCategory}`);
+        if (typeof loadExpenses === 'function') loadExpenses(); 
+      } else {
+        alert("Receipt toh read ho gayi, par database mein save nahi ho paya.");
+      }
+
+    } catch (error) {
+      console.error("Frontend Scan Error:", error);
+      alert("Google Gemini API ki limit temporary khatam ho gayi hai. Please thodi der baad try karein!");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+};
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
       {/* Title */}
@@ -192,30 +231,23 @@ export default function App() {
         {/* Transcript */}
         {transcript && (
           <div className="mt-6 bg-white shadow rounded-lg p-4 w-full max-w-md">
-            <h3 className="font-semibold text-lg mb-2">
-              You said:
-            </h3>
+            <h3 className="font-semibold text-lg mb-2">You said:</h3>
 
-            <p className="text-gray-700">
-              "{transcript}"
-            </p>
+            <p className="text-gray-700">"{transcript}"</p>
           </div>
         )}
       </div>
 
-      {/* Expense Chart */}
       <ExpenseChart />
 
       {/* Expense List */}
-      <div className="w-full max-w-md mt-8">
+      <div className="w-full max-w-md">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">
           Recent Spending
         </h2>
 
         {expenses.length === 0 ? (
-          <p className="text-center text-gray-500">
-            No expenses found.
-          </p>
+          <p className="text-center text-gray-500">No expenses found.</p>
         ) : (
           expenses.map((expense) => (
             <Card key={expense.id} className="mb-3">
