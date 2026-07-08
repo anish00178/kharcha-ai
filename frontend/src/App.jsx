@@ -20,7 +20,7 @@ export default function App() {
   // ==========================
  const loadExpenses = async () => {
   try {
-    const response = await fetch("https://kharcha-backend-ai.onrender.com/api/expenses");
+    const response = await fetch("https://kharcha-ai.onrender.com/api/expenses");
     
     // Agar server 500 error de, toh crash hone ke bajaye khali array set karo
     if (!response.ok) {
@@ -71,7 +71,7 @@ export default function App() {
 
       try {
         // Send voice text to Gemini
-        const aiResponse = await fetch("https://kharcha-backend-ai.onrender.com/api/analyze", {
+        const aiResponse = await fetch("https://kharcha-ai.onrender.com/api/analyze", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -92,7 +92,7 @@ export default function App() {
         const extractedExpense = JSON.parse(cleanJsonString);
 
         // Save to backend
-        await fetch("https://kharcha-backend-ai.onrender.com/api/expenses", {
+        await fetch("https://kharcha-ai.onrender.com/api/expenses", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -133,7 +133,7 @@ export default function App() {
   reader.onloadend = async () => {
     const base64String = reader.result.split(',')[1];
     try {
-      const response = await fetch('https://kharcha-backend-ai.onrender.com/api/scan-receipt', {
+      const response = await fetch('https://kharcha-ai.onrender.com/api/scan-receipt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64String })
@@ -170,7 +170,7 @@ export default function App() {
         return;
       }
 
-      const saveResponse = await fetch("https://kharcha-backend-ai.onrender.com/api/expenses", {
+      const saveResponse = await fetch("https://kharcha-ai.onrender.com/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
