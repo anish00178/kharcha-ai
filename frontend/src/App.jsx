@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "./components/ui/button";
-import ExpenseChart from "./ExpenseChart";
 import { Card, CardContent } from "./components/ui/card";
+import ExpenseChart from "./ExpenseChart";
+
+const API_URL = "https://kharcha-ai.onrender.com";
 
 export default function App() {
-
   // Expense List
   const [expenses, setExpenses] = useState([]);
 
@@ -20,7 +21,7 @@ export default function App() {
   // ==========================
   const loadExpenses = async () => {
     try {
-      const response = await fetch("https://kharcha-ai.onrender.com/api/expenses");
+      const response = await fetch(`${API_URL}/api/expenses`);
       const realData = await response.json();
       setExpenses(realData);
     } catch (error) {
@@ -58,12 +59,11 @@ export default function App() {
 
     recognition.onresult = async (event) => {
       const spokenText = event.results[0][0].transcript;
-
       setTranscript(spokenText);
 
       try {
-        // Send voice text to Gemini
-        const aiResponse = await fetch("https://kharcha-ai.onrender.com/api/analyze", {
+        // Send voice to Gemini
+        const aiResponse = await fetch(`${API_URL}/api/analyze`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -75,7 +75,6 @@ export default function App() {
 
         const aiData = await aiResponse.json();
 
-        // Remove markdown if Gemini returns ```json
         const cleanJsonString = aiData.result
           .replace(/```json/g, "")
           .replace(/```/g, "")
@@ -83,8 +82,8 @@ export default function App() {
 
         const extractedExpense = JSON.parse(cleanJsonString);
 
-        // Save to backend
-        await fetch("https://kharcha-ai.onrender.com/api/expenses", {
+        // Save expense
+        await fetch(`${API_URL}/api/expenses`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -92,7 +91,6 @@ export default function App() {
           body: JSON.stringify(extractedExpense),
         });
 
-        // Refresh list
         loadExpenses();
       } catch (error) {
         console.error(error);
@@ -130,22 +128,22 @@ export default function App() {
       const imageBase64 = reader.result.split(",")[1];
 
       try {
-        const response = await fetch(
-          "https://kharcha-ai.onrender.com/api/scan-receipt",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              imageBase64,
-            }),
-          }
-        );
+        const response = await fetch(`${API_URL}/api/scan-receipt`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            imageBase64,
+          }),
+        });
 
         const data = await response.json();
 
         alert("Receipt Scanned Successfully!\n\n" + data.result);
+
+        // Refresh expenses after scan
+        loadExpenses();
       } catch (error) {
         console.error(error);
         alert("Failed to scan receipt.");
@@ -218,7 +216,10 @@ export default function App() {
           </p>
         ) : (
           expenses.map((expense) => (
-            <Card key={expense.id} className="mb-3">
+            <Card
+              key={expense._id || expense.id}
+              className="mb-3"
+            >
               <CardContent className="p-4 flex justify-between items-center">
                 <span className="font-medium text-gray-800">
                   {expense.category}
