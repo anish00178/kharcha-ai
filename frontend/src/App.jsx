@@ -21,14 +21,14 @@ export default function App() {
  const loadExpenses = async () => {
   try {
     const response = await fetch("https://kharcha-ai.onrender.com/api/expenses");
-    
-    // Agar server 500 error de, toh crash hone ke bajaye khali array set karo
+
     if (!response.ok) {
       setExpenses([]);
       return;
     }
 
     const realData = await response.json();
+
     if (Array.isArray(realData)) {
       setExpenses(realData);
     } else {
@@ -36,9 +36,13 @@ export default function App() {
     }
   } catch (error) {
     console.error("Failed to load expenses:", error);
-    setExpenses([]); // 💡 Never crash the UI
+    setExpenses([]);
   }
 };
+
+useEffect(() => {
+  loadExpenses();
+}, []);
 
   // ==========================
   // Voice Recognition
